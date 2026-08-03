@@ -1,0 +1,159 @@
+-- NYC REAL ESTATE SQL ANALYSIS
+-- KEY FINDINGS
+--
+-- Query 1: Year Over Year Price Change by Borough
+-- Manhattan posted the steepest single-year appreciation at 20.41% from 2016 to 2017.
+-- The Bronx recorded the only meaningful price decline at approximately 4% in 2023,
+-- consistent with Federal Reserve rate hikes compressing buyer purchasing power in 
+-- the most affordable market.
+--
+-- Query 2: Neighborhood Transaction Growth 2016-2025
+-- Transaction growth from 2016 to 2025 was geographically broad across all five boroughs.
+-- Brooklyn dominated with 7 of the top 20 neighborhoods including Boerum Hill,
+-- Greenpoint,and Park Slope. Bedford Park and Highbridge/Morris Heights in the Bronx
+-- signal early-stage gentrification in historically affordable markets. 
+--
+-- Query 3: Top Neighborhoods by Price Per Square Foot 
+-- Manhattan accounts for 9 of the top 10 neighborhoods by median price per sqft.
+-- Greenwich Village West leads at $2,372/sqft, roughly 4-5x the citywide median
+-- of $430. Meaningful stratification exists even within Manhattan's premium tier.
+--
+-- Query 4: Building Type Impact on Price Per Square Foot 
+-- Manhattan single family homes lead all property types citywide at $1,870 per square 
+-- foot. Condo prices show widest borough spread as Manhattan condos at $1,538 are more
+-- than six times that of the Bronx at a median of $244. Manhattan elevator apartments
+-- rank fourth among boroughs at this property type, trailing Brooklyn, Queens, and the 
+-- Bronx. This suggests Manhattan's large elevator building stock decreases per-square-foot
+-- figures relative to smaller outer borough elevator buildings where unit sizes are more compact.
+--
+-- Query 5: Top 10 Zip Codes by Median Sale Price 
+-- Manhattan accounts for 8 of the top 10 zip codes by median sale price, with
+-- SoHo/Tribeca's 10013 leading at $3.7M. Brooklyn makes two appearances with
+-- Carroll Gardens/Cobble Hill and Park Slope/Boerum Hill both exceeding $1.5M median, 
+-- reinforcing Brooklyn's emergence as a premium market relative to other outer boroughs. 
+--
+-- Query 6: Borough Market Summary 
+-- Brooklyn, the Bronx, Manhattan, and Queens average construction years between 1933
+-- and 1942, reflecting NYC's pre-war development boom. Staten Island's 1968 average 
+-- reflects its suburban character and post-Verrazzano Bridge growth. Manhattan's 
+-- maximum transaction of $2.4B is nearly three times Brooklyn's $870M, signaling
+-- large commercial portfolio activity concentrated in Manhattan. 
+
+-- QUERIES BEGIN BELOW
+
+-- Query 1: Year Over Year Price Change by Borough
+SELECT
+	borough,
+	year,
+	median_price,
+	LAG(median_price) OVER (PARTITION BY borough ORDER BY year) AS prior_year_price,
+	ROUND(((median_price - LAG(median_price) OVER (PARTITION BY borough ORDER BY year))/
+	LAG(median_price) OVER (PARTITION BY borough ORDER BY year)) * 100, 2) AS yoy_pct_change
+FROM (
+	SELECT 
+		borough,
+		EXTRACT(YEAR FROM sale_date) AS year,
+		PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY sale_price)::NUMERIC AS median_price
+FROM nyc_sales_clean
+GROUP BY borough, EXTRACT(YEAR FROM sale_date)
+) AS yearly_medians
+ORDER BY borough, year;
+
+-- Query 2: Neighborhood Transaction Growth 2016 - 2025
+SELECT
+	neighborhood,
+	transactions_2016,
+	transactions_2025,
+	ROUND(((transactions_2025 - transactions_2016)::NUMERIC /
+	NULLIF(transactions_2016, 0)) * 100, 2) AS pct_change
+FROM (
+	SELECT 
+    	neighborhood,
+    	COUNT(CASE WHEN sale_year = 2016 THEN 1 END) AS transactions_2016,
+    	COUNT(CASE WHEN sale_year = 2025 THEN 1 END) AS transactions_2025
+	FROM (
+    	SELECT
+        	neighborhood,
+        	CAST(EXTRACT(YEAR FROM sale_date) AS INTEGER) AS sale_year
+    	FROM nyc_sales_clean
+	) AS yearly_counts
+	GROUP BY neighborhood
+) AS neighborhood_counts
+WHERE transactions_2016 >= 50
+AND transactions_2025 >= 50
+ORDER BY pct_change DESC
+LIMIT 20;
+
+-- Query 3: Top Neighborhoods by Price Per Square Foot
+SELECT
+    neighborhood,
+    PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY sale_price / gross_sqft)::NUMERIC AS median_price_per_sqft
+FROM nyc_sales_clean
+WHERE gross_sqft > 0
+AND gross_sqft IS NOT NULL
+GROUP BY neighborhood
+HAVING COUNT(*) >= 50
+ORDER BY median_price_per_sqft DESC
+LIMIT 10;
+
+-- Query 4: Building Type Impact on Price Per Square Foot
+SELECT
+	CASE
+		WHEN borough = 1 THEN 'Manhattan'
+		WHEN borough = 2 THEN 'Bronx'
+		WHEN borough = 3 THEN 'Brooklyn'
+		WHEN borough = 4 THEN 'Queens'
+		WHEN borough = 5 THEN 'Staten Island'
+	END AS borough_name,
+	CASE
+    	WHEN building_class_sale IN ('CC', 'C6', 'D4', 'DC') THEN 'Co-op'
+    	WHEN building_class_sale LIKE 'A%' THEN 'Single Family'
+    	WHEN building_class_sale LIKE 'B%' THEN 'Two Family'
+    	WHEN building_class_sale LIKE 'C%' THEN 'Walk-Up Apartment'
+    	WHEN building_class_sale LIKE 'D%' THEN 'Elevator Apartment'
+    	WHEN building_class_sale LIKE 'R%' THEN 'Condo'
+    	WHEN building_class_sale LIKE 'S%' THEN 'Mixed Use'
+    	WHEN building_class_sale LIKE 'K%' THEN 'Commercial'
+    	WHEN building_class_sale LIKE 'O%' THEN 'Commercial'
+    	ELSE 'Other'
+	END AS property_type,
+	PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY sale_price / gross_sqft)::NUMERIC AS median_price_per_sqft,
+	COUNT(*) AS transaction_count
+FROM nyc_sales_clean
+WHERE gross_sqft > 0
+AND gross_sqft IS NOT NULL
+GROUP BY borough, property_type
+HAVING COUNT(*) >= 50
+ORDER BY borough, median_price_per_sqft DESC;
+
+--Query 5: Top 10 Zip Codes by Median Sale Price 
+SELECT 
+	zip_code,
+	PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY sale_price)::NUMERIC AS median_sale_price,
+	COUNT(*) AS transaction_count
+FROM nyc_sales_clean
+GROUP BY zip_code
+HAVING COUNT(*) >= 50
+ORDER BY median_sale_price DESC
+LIMIT 10;
+
+-- Query 6: Borough Market Summary
+SELECT
+	CASE
+		WHEN borough = 1 THEN 'Manhattan'
+		WHEN borough = 2 THEN 'Bronx'
+		WHEN borough = 3 THEN 'Brooklyn'
+		WHEN borough = 4 THEN 'Queens'
+		WHEN borough = 5 THEN 'Staten Island'
+	END AS borough_name,
+	COUNT(*) AS total_transactions,
+	PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY sale_price)::NUMERIC AS median_sale_price,
+	PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY sale_price / gross_sqft)::NUMERIC AS median_price_per_sqft,
+	ROUND(AVG(CASE WHEN year_built > 1800 THEN year_built END)::NUMERIC, 0) AS avg_year_built,
+	MIN(sale_price) AS min_sale_price,
+	MAX(sale_price) AS max_sale_price
+FROM nyc_sales_clean
+WHERE gross_sqft > 0
+AND gross_sqft IS NOT NULL
+GROUP BY borough
+ORDER BY median_sale_price DESC;
