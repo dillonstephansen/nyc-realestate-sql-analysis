@@ -31,6 +31,7 @@ Manhattan posted the steepest single-year appreciation at 20.41% from 2016 to 20
 Transaction growth was geographically broad across all five boroughs. Brooklyn dominated with 7 of the top 20 neighborhoods including Boerum Hill, Greenpoint, and Park Slope. Bedford Park and Highbridge/Morris Heights in the Bronx signal early-stage gentrification in historically affordable markets. 
 
 **Query 3: Top Neighborhoods by Price Per Square Foot** 
+
 Manhattan accounts for 9 of the top 10 neighborhoods by median price per square foot, with Greenwich Village West leading at $2,372. This number is roughly 4 to 5 times the citywide median of $430. 
 
 **Query 4: Building Type Impact on Price Per Square Foot** 
