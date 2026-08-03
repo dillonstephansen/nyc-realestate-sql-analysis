@@ -12,8 +12,7 @@ This project complements an interactive Power BI dashboard built on the same dat
 
 ## Data Source
 NYC Department of Finance - Rolling Sales Data
-Source: NYC Open Data (publicly available) 
-
+Source: NYC Open Data (publicly available) <br>
 Raw dataset: 845,607 rows | Cleaned dataset: 568,541 rows
 
 ## Data Cleaning
